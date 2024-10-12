@@ -1,0 +1,197 @@
+---
+title: "Data Exploration"
+author: "Heru Handika"
+date: "2/16/2021"
+output: html_document
+---
+
+```{r}
+if (!require(pacman)) {
+  install.packages(pacman)
+}
+
+pacman::p_load(here)
+pacman::p_load(infer)
+pacman::p_load(tibble)
+pacman::p_load(tidyr)
+pacman::p_load(dplyr)
+pacman::p_load(ggplot2)
+
+
+source(here("R", "colors.R"))
+source(here("R", "utils.R"))
+
+package_list <- c("here", "pacman", "infer", "tidyr", "dplyr", "ggplot2", "tibble")
+
+generate_citation <- function(packageName) {
+  packageVersion(packageName)
+  citation(packageName)
+}
+
+purrr::map(package_list, generate_citation)
+
+RStudio.Version()
+```
+
+## Dataset selection
+
+Here, I use the morphology data as source of files. Then I select 20 skull variables to create a dataset for skull data analyses. 
+
+
+```{r}
+morph_all <- readr::read_csv(here("data", "morphology", "morpho_all.csv"))
+
+ext <- morph_all |> 
+  dplyr::select(species, voucher_no, site_id, HB, TL, HF, ER, Mass)
+
+skulls <- morph_all |> 
+  dplyr::select(voucher_no, species, GLS:DUI)
+
+species_group2 <- c("Bunomys penitus", "Frateromys fratrorum", "Frateromys spnov", "Lenomys meyeri", "Taeromys dominator")
+
+species_group1 <- c("Bunomys chrysocomus", "Frateromys fratrorum", "Frateromys spnov", "Taeromys dominator", "Taeromys taerae")
+```
+
+## Test statistics for sexual dimorphism
+
+```{r}
+frateromys.df <- morph_all |> 
+  tidyr::drop_na(GLS) |> 
+  dplyr::filter(sex != "Unknown") |>
+  dplyr::filter(genus == "Frateromys")
+
+temboan.df <- frateromys.df |>
+  dplyr::filter(site_id == "Temboan") |> 
+  dplyr::filter(sex != "n/a")
+
+temboan.df |> 
+  group_by(sex) |> 
+  dplyr::summarise(N = n())
+
+temboan.df |> 
+  infer::t_test(response = GLS, explanatory = sex)
+
+count <- frateromys.df |> 
+  dplyr::group_by(species, site_id, sex) |> 
+  dplyr::count()
+
+count
+```
+
+## Summarize external characters
+
+
+```{r}
+ext_sum <- ext |>
+  dplyr::group_by(species) |>
+  dplyr::select(-voucher_no)
+
+sum <- ext_sum |> 
+  dplyr::summarize_all(tibble::lst(mean, min, max, sd))
+
+HB_stats <- ext_sum |>
+  tidyr::drop_na() |>
+  dplyr::summarise(N = n(), HB_mean = mean(HB), HB_min = min(HB), HB_max = max(HB), HB_sd = sd(HB))
+
+TL_stats <- ext_sum |>
+  tidyr::drop_na() |>
+  dplyr::summarise(N = n(), TL_mean = mean(TL), TL_min = min(TL), TL_max = max(TL), TL_sd = sd(TL))
+
+ext |>
+  dplyr::group_by(species) |>
+  dplyr::summarise(n())
+
+sample_per_site <- ext |>
+  dplyr::group_by(species) |>
+  dplyr::count(site_id)
+
+sum_per_site <- ext |>
+  dplyr::select(species, site_id, HB, TL) |>
+  tidyr::drop_na() |>
+  dplyr::mutate(hb_tl = TL / HB * 100) |>
+  dplyr::group_by(species, site_id) |>
+  dplyr::summarise(N = n(), HB_TL_mean = mean(hb_tl), TL_mean = mean(TL), TL_min = min(TL), TL_max = max(TL), TL_sd = sd(TL))
+```
+
+## Box plot
+
+```{r}
+ext |> 
+  dplyr::select(species, HB:ER) |> 
+  dplyr::filter(species %in% target) |> 
+  tidyr::drop_na() |> 
+  tidyr::gather(key = "ext_char", value = "measurement", HB:ER) |>
+  dplyr::mutate(ext_char = fct_reorder(ext_char, measurement, .desc = TRUE)) |>
+  ggplot(aes(species, measurement)) + 
+  geom_boxplot(aes(fill = species)) +
+  facet_wrap(~ext_char, ncol = 2, scale="free_y") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 50, hjust = 1)) + 
+  labs(x = "Species", y = "Measurements")
+  
+
+save_plot(fname = "ext_char.pdf", .width = 8, .height = 5)
+```
+## Shared plot function
+This function is used for creating scatter plots across the downstream analyses.
+
+```{r}
+plot <- function(plot_data) {
+  plot_data +
+    geom_point(aes(color = species, shape = species), size = 3) +
+    scale_color_drunken_mice() +
+    scale_shape_manual(values = c(1, 15, 16, 2, 0, 5)) +
+    theme_classic(base_size = 12) +
+    theme(legend.position = "right")
+}
+```
+
+
+### Scatter plot for External Character
+
+```{r}
+ext_p <- ggplot(ext_scatter_df, aes(HB, TL))
+
+p <- plot(ext_p) + labs(x = "Head and Body Length (mm)", y = "Tail Length (mm)")
+p
+save_ext("hb_tl_scatterplot.pdf")
+```
+
+## PCA for Skulls
+
+```{r}
+skull_clean <- skulls |>
+  drop_na() |>
+  filter(species %in% target)
+
+skull_pca <- prcomp(skull_clean[, 3:22], center = TRUE)
+```
+
+### Inspect PCA
+
+```{r}
+eigen <- skull_pca$sdev^2
+eigen
+
+loadings <- skull_pca$rotation
+loadings
+
+summary(skull_pca)$importance
+```
+
+### Plot PCA
+
+```{r}
+skull_df <- tibble(species = skull_clean$species, PC1 = skull_pca$x[, 1], PC2 = skull_pca$x[, 2], PC3= skull_pca$x[, 3])
+
+pca_12 <- ggplot(skull_df, aes(PC1, PC2))
+pca_13 <- ggplot(skull_df, aes(PC1, PC3))
+
+p2 <- plot(pca_12) + labs(x = "PC1 (89.7%)", y = "PC2 (2.2%)")
+save_skull("pca_20skulls_pc1_pc2.pdf")
+
+
+p3 <- plot(pca_13) +labs(x = "PC1 (89.7%)", y = "PC3 (1.4%)")
+save_skull("pca_20skulls_pc1_pc3.pdf")
+
+```

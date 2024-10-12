@@ -1,0 +1,86 @@
+---
+title: "Phylo"
+author: "Heru Handika"
+date: "10/15/2021"
+output: html_document
+---
+
+```{r}
+pacman::p_load(here)
+pacman::p_load(ape)
+pacman::p_load(tidyr)
+pacman::p_load(dplyr)
+pacman::p_load(readr)
+pacman::p_load(ggtree)
+pacman::p_load(tidytree)
+```
+
+## Create a tree phylogeny
+
+```{r}
+cytb.tree <- read.tree(here::here("data", "trees", "cytb_ml.treefile"))
+nuclear.tree <- read.tree(here::here("data", "trees", "nuclear_codon.tree"))
+
+data <- as_tibble(cytb.tree)
+
+rooted_cytb <- root(cytb.tree, node = 145, resolve.root = TRUE)
+
+bs <- rooted_cytb$node.label
+
+ggtree(rooted_cytb) +
+  geom_treescale(x = 0.2, y = 0.2) +
+  # geom_tiplab(size=2.5) +
+  geom_label2(aes(label=label))
+```
+
+
+
+## Data loading and distance matrix computing 
+
+```{r}
+alignment.path <- here::here("data","alignment","cytb_genetic_dist.phy")
+
+alignment <- ape::read.dna(alignment.path, format="interleaved")
+
+distance <- alignment |> 
+  ape::dist.dna(model = "JC69", variance = FALSE, gamma = FALSE, pairwise.deletion = FALSE, base.freq = NULL, as.matrix = TRUE) |>
+  # Ape save to matrix. We convert it to tibble data frame
+  # for easy manipulation using tidyverse syntax
+  tibble::as_tibble(rownames = "Taxon") 
+  
+
+distance.long <- distance |>
+  tidyr::pivot_longer(!Taxon, names_to = "Taxon2", values_to = "JC69")
+``` 
+
+# Save intra-specific genetic distance (OPTIONAL)
+
+```{r}
+readr::write_csv(melted_distance, here("results", "JC69-distances-melted.csv"))
+readr::write_csv(distance, here("results", "JC69-distance-matrix.csv"))
+```
+
+
+## Computing avarage genetic distance for inter-specific relationship
+
+```{r}
+distance.inter <- distance.long |>
+  tidyr::separate(Taxon, c("Genus1", "Species1", "Museum_no"), sep="_", extra = "drop") |>
+  tidyr::separate(Taxon2, c("Genus2", "Species2", "Museum_no2"), sep="_", extra = "drop") |>
+  tidyr::unite("Species", Genus1, Species1) |>
+  tidyr::unite("Species2", Genus2, Species2)
+
+inter_dist_matrix <- distance.inter |>
+  dplyr::group_by(Species, Species2) |>
+  dplyr::summarise(Distance = mean(JC69)) |>
+  dplyr::filter(Species != Species2) |> # Include only inter-specific relationship
+  tidyr::pivot_wider(id_cols = Species, names_from = Species2, values_from = Distance) |>
+  # Somehow tidyr messes up the order of the columns. 
+  # B. andrewsi comes last. Here, we move it into the second column
+  dplyr::relocate(Bunomys_andrewsi, .after = Species)
+
+# Remove duplicate values in the upper triangle of the matrix
+inter_dist_matrix[upper.tri(inter_dist_matrix)] <- NA
+
+readr::write_csv(inter_dist_matrix, here("results", "inter-specific-dist-matrix.csv"), na="")
+```
