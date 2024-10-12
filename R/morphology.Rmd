@@ -12,6 +12,7 @@ if (!require(pacman)) {
 
 pacman::p_load(here)
 pacman::p_load(infer)
+pacman::p_load(forcats)
 pacman::p_load(tibble)
 pacman::p_load(tidyr)
 pacman::p_load(dplyr)
@@ -20,23 +21,11 @@ pacman::p_load(ggplot2)
 
 source(here("R", "colors.R"))
 source(here("R", "utils.R"))
-
-package_list <- c("here", "pacman", "infer", "tidyr", "dplyr", "ggplot2", "tibble")
-
-generate_citation <- function(packageName) {
-  packageVersion(packageName)
-  citation(packageName)
-}
-
-purrr::map(package_list, generate_citation)
-
-RStudio.Version()
 ```
 
 ## Dataset selection
 
-Here, I use the morphology data as source of files. Then I select 20 skull variables to create a dataset for skull data analyses. 
-
+Load and subset datasets for external and skull morphology analyses.
 
 ```{r}
 morph_all <- readr::read_csv(here("data", "morphology", "morpho_all.csv"))
@@ -47,9 +36,8 @@ ext <- morph_all |>
 skulls <- morph_all |> 
   dplyr::select(voucher_no, species, GLS:DUI)
 
-species_group2 <- c("Bunomys penitus", "Frateromys fratrorum", "Frateromys spnov", "Lenomys meyeri", "Taeromys dominator")
-
-species_group1 <- c("Bunomys chrysocomus", "Frateromys fratrorum", "Frateromys spnov", "Taeromys dominator", "Taeromys taerae")
+combined <- morph_all |> 
+  dplyr::select(voucher_no, species, HB:DUI)
 ```
 
 ## Test statistics for sexual dimorphism
@@ -116,12 +104,16 @@ sum_per_site <- ext |>
 ## Box plot
 
 ```{r}
+species_group1 <- c("Bunomys chrysocomus", "Frateromys fratrorum", "Frateromys spnov", "Taeromys dominator", "Taeromys taerae")
+
+species_group2 <- c("Bunomys penitus", "Frateromys fratrorum", "Frateromys spnov", "Lenomys meyeri", "Taeromys dominator")
+
 ext |> 
   dplyr::select(species, HB:ER) |> 
-  dplyr::filter(species %in% target) |> 
+  dplyr::filter(species %in% species_group1) |>
   tidyr::drop_na() |> 
   tidyr::gather(key = "ext_char", value = "measurement", HB:ER) |>
-  dplyr::mutate(ext_char = fct_reorder(ext_char, measurement, .desc = TRUE)) |>
+  dplyr::mutate(ext_char = forcats::fct_reorder(ext_char, measurement, .desc = TRUE)) |>
   ggplot(aes(species, measurement)) + 
   geom_boxplot(aes(fill = species)) +
   facet_wrap(~ext_char, ncol = 2, scale="free_y") +
@@ -133,6 +125,7 @@ ext |>
 save_plot(fname = "ext_char.pdf", .width = 8, .height = 5)
 ```
 ## Shared plot function
+
 This function is used for creating scatter plots across the downstream analyses.
 
 ```{r}
@@ -162,19 +155,45 @@ save_ext("hb_tl_scatterplot.pdf")
 ```{r}
 skull_clean <- skulls |>
   drop_na() |>
-  filter(species %in% target)
+  filter(species %in% species_group1)
 
 skull_pca <- prcomp(skull_clean[, 3:22], center = TRUE)
 ```
 
+## PCA Combined 
+
+```{r}
+combined_cleaned <- combined |>
+  drop_na() |>
+  filter(species %in% species_group1)
+
+combined_pca <- prcomp(combined_cleaned[, 3:7], center = TRUE, scale = TRUE)
+
+comb_loadings <- combined_pca$rotation |> 
+  tibble::as_tibble(rownames = "Var")
+
+skull_df <- tibble(species = combined_cleaned$species, PC1 = combined_pca$x[, 1], PC2 = combined_pca$x[, 2])
+
+pca_12 <- ggplot(skull_df, aes(PC1, PC2))
+pca_13 <- ggplot(skull_df, aes(PC1, PC3))
+
+p2 <- plot(pca_12) + labs(x = "PC1 (89.7%)", y = "PC2 (2.2%)")
+save_plot(fname = "pca_20skulls_pc1_pc2.pdf")
+
+```
+
+
 ### Inspect PCA
 
 ```{r}
-eigen <- skull_pca$sdev^2
-eigen
+eigen <- skull_pca$sdev^2 |> 
+  tibble::as_tibble(rownames = "PC") 
+skull_pca
 
 loadings <- skull_pca$rotation
-loadings
+
+loadings.df <- loadings |> 
+  tibble::as_tibble(rownames = "Variables")
 
 summary(skull_pca)$importance
 ```
@@ -187,11 +206,29 @@ skull_df <- tibble(species = skull_clean$species, PC1 = skull_pca$x[, 1], PC2 = 
 pca_12 <- ggplot(skull_df, aes(PC1, PC2))
 pca_13 <- ggplot(skull_df, aes(PC1, PC3))
 
+
 p2 <- plot(pca_12) + labs(x = "PC1 (89.7%)", y = "PC2 (2.2%)")
-save_skull("pca_20skulls_pc1_pc2.pdf")
+save_plot(fname = "pca_20skulls_pc1_pc2.pdf")
 
 
 p3 <- plot(pca_13) +labs(x = "PC1 (89.7%)", y = "PC3 (1.4%)")
-save_skull("pca_20skulls_pc1_pc3.pdf")
+save_plot(fname = "pca_20skulls_pc1_pc3.pdf")
 
 ```
+
+## Citation
+
+```{r}
+
+package_list <- c("here", "pacman", "infer", "tidyr", "dplyr", "ggplot2", "tibble")
+
+generate_citation <- function(packageName) {
+  packageVersion(packageName)
+  citation(packageName)
+}
+
+purrr::map(package_list, generate_citation)
+
+RStudio.Version()
+```
+

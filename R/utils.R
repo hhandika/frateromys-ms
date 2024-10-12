@@ -11,11 +11,11 @@ save_ext <- function(fname) {
 }
 
 save_skull <- function(fname) {
-  ggsave(here("figures", fname), width = 7, height = 4)
+  ggsave(here("results", "figures", fname), width = 7, height = 4)
   system(paste("Powershell.exe Start ", here("figures", fname)))
 }
 
-save_plot <- function(dir = "figures", fname, .width = 7, .height = 4) {
+save_plot <- function(dir = "results/figures", fname, .width = 7, .height = 4) {
   ggsave(here(dir, fname), width = .width, height = .height)
 
   if (is_windows()) {
