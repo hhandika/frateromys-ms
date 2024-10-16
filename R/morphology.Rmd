@@ -28,7 +28,8 @@ source(here("R", "utils.R"))
 Load and subset datasets for external and skull morphology analyses.
 
 ```{r}
-morph_all <- readr::read_csv(here("data", "morphology", "morpho_all.csv"))
+morph_all <- readr::read_csv(here("data", "morphology", "morpho_all.csv")) |> 
+  dplyr::mutate(species = stringr::str_replace(species, pattern = "Frateromys spnov", "Frateromys sororum"))
 
 ext <- morph_all |> 
   dplyr::select(species, voucher_no, site_id, HB, TL, HF, ER, Mass)
@@ -39,7 +40,6 @@ skulls <- morph_all |>
 combined <- morph_all |> 
   dplyr::select(voucher_no, species, HB:DUI)
 ```
-
 ## Test statistics for sexual dimorphism
 
 ```{r}
@@ -104,9 +104,9 @@ sum_per_site <- ext |>
 ## Box plot
 
 ```{r}
-species_group1 <- c("Bunomys chrysocomus", "Frateromys fratrorum", "Frateromys spnov", "Taeromys dominator", "Taeromys taerae")
+species_group1 <- c("Bunomys chrysocomus", "Frateromys fratrorum", "Frateromys sororum", "Taeromys dominator", "Taeromys taerae")
 
-species_group2 <- c("Bunomys penitus", "Frateromys fratrorum", "Frateromys spnov", "Lenomys meyeri", "Taeromys dominator")
+species_group2 <- c("Bunomys penitus", "Frateromys fratrorum", "Frateromys sororum", "Lenomys meyeri", "Taeromys dominator")
 
 ext |> 
   dplyr::select(species, HB:ER) |> 
@@ -139,7 +139,6 @@ plot <- function(plot_data) {
 }
 ```
 
-
 ### Scatter plot for External Character
 
 ```{r}
@@ -150,6 +149,21 @@ p
 save_ext("hb_tl_scatterplot.pdf")
 ```
 
+## Explore key characters
+
+```{r}
+morph_all |> 
+  dplyr::filter(species %in% species_group1) |>
+  tidyr::drop_na() |> 
+  ggplot(aes(x = ZB, y = LON)) +
+    geom_boxplot(aes(fill = species)) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 50, hjust = 1)) + 
+    labs(x = "Species", y = "Measurements")
+  
+```
+
+
 ## PCA for Skulls
 
 ```{r}
@@ -157,31 +171,8 @@ skull_clean <- skulls |>
   drop_na() |>
   filter(species %in% species_group1)
 
-skull_pca <- prcomp(skull_clean[, 3:22], center = TRUE)
+skull_pca <- prcomp(skull_clean[, 3:22], center = TRUE, scale = TRUE)
 ```
-
-## PCA Combined 
-
-```{r}
-combined_cleaned <- combined |>
-  drop_na() |>
-  filter(species %in% species_group1)
-
-combined_pca <- prcomp(combined_cleaned[, 3:7], center = TRUE, scale = TRUE)
-
-comb_loadings <- combined_pca$rotation |> 
-  tibble::as_tibble(rownames = "Var")
-
-skull_df <- tibble(species = combined_cleaned$species, PC1 = combined_pca$x[, 1], PC2 = combined_pca$x[, 2])
-
-pca_12 <- ggplot(skull_df, aes(PC1, PC2))
-pca_13 <- ggplot(skull_df, aes(PC1, PC3))
-
-p2 <- plot(pca_12) + labs(x = "PC1 (89.7%)", y = "PC2 (2.2%)")
-save_plot(fname = "pca_20skulls_pc1_pc2.pdf")
-
-```
-
 
 ### Inspect PCA
 
@@ -215,6 +206,29 @@ p3 <- plot(pca_13) +labs(x = "PC1 (89.7%)", y = "PC3 (1.4%)")
 save_plot(fname = "pca_20skulls_pc1_pc3.pdf")
 
 ```
+
+## PCA Combined 
+
+```{r}
+combined_cleaned <- combined |>
+  drop_na() |>
+  filter(species %in% species_group1)
+
+combined_pca <- prcomp(combined_cleaned[, 3:7], center = TRUE, scale = TRUE)
+
+comb_loadings <- combined_pca$rotation |> 
+  tibble::as_tibble(rownames = "Var")
+
+skull_df <- tibble(species = combined_cleaned$species, PC1 = combined_pca$x[, 1], PC2 = combined_pca$x[, 2])
+
+pca_12 <- ggplot(skull_df, aes(PC1, PC2))
+pca_13 <- ggplot(skull_df, aes(PC1, PC3))
+
+p2 <- plot(pca_12) + labs(x = "PC1 (89.7%)", y = "PC2 (2.2%)")
+save_plot(fname = "pca_20skulls_pc1_pc2.pdf")
+
+```
+
 
 ## Citation
 
