@@ -1,0 +1,6 @@
+---
+title: "Sulawesi Map"
+author: "Heru Handika"
+date: "2024-11-26"
+output: html_document
+---
