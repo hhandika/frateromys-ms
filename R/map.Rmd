@@ -4,3 +4,20 @@ author: "Heru Handika"
 date: "2024-11-26"
 output: html_document
 ---
+
+```{r}
+if (!require(pacman)) {
+  install.packages(pacman)
+}
+
+pacman::p_load(sf)
+pacman::p_load(readxl)
+pacman::p_load(here)
+pacman::p_load(ggplot2)
+pacman::p_load(rnaturalearth)
+```
+
+```{r}
+
+```
+
