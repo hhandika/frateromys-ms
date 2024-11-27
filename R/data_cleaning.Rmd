@@ -1,0 +1,28 @@
+---
+title: "Data Cleaning"
+output: html_document
+date: "2024-11-27"
+---
+
+# Load required packages
+
+```{r}
+if (!require(pacman)) {
+  install.packages(pacman)
+}
+
+pacman::p_load(here)
+pacman::p_load(readxl)
+```
+
+# Load data
+
+```{r}
+data <- readxl::read_excel(here::here("data", "morpho_all.xlsx"))
+
+locality <- data |> 
+  dplyr::select(localities) |> 
+  dplyr::distinct()
+
+```
+
