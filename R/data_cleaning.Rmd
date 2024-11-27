@@ -24,5 +24,6 @@ locality <- data |>
   dplyr::select(localities) |> 
   dplyr::distinct()
 
+readr::write_csv(locality, here::here("results", "localities.csv"))
 ```
 
