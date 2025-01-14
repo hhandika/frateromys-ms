@@ -13,32 +13,13 @@ pacman::p_load(dplyr)
 pacman::p_load(readr)
 pacman::p_load(ggtree)
 pacman::p_load(tidytree)
+pacman::p_load(ggplot2)
 ```
-
-## Create a tree phylogeny
-
-```{r}
-cytb.tree <- read.tree(here::here("data", "trees", "cytb_ml.treefile"))
-nuclear.tree <- read.tree(here::here("data", "trees", "nuclear_codon.tree"))
-
-data <- as_tibble(cytb.tree)
-
-rooted_cytb <- root(cytb.tree, node = 145, resolve.root = TRUE)
-
-bs <- rooted_cytb$node.label
-
-ggtree(rooted_cytb) +
-  geom_treescale(x = 0.2, y = 0.2) +
-  # geom_tiplab(size=2.5) +
-  geom_label2(aes(label=label))
-```
-
-
 
 ## Data loading and distance matrix computing 
 
 ```{r}
-alignment.path <- here::here("data","alignment","cytb_genetic_dist.phy")
+alignment.path <- here::here("data", "alignments", "1_cytb_dist.phy")
 
 alignment <- ape::read.dna(alignment.path, format="interleaved")
 
@@ -46,20 +27,54 @@ distance <- alignment |>
   ape::dist.dna(model = "JC69", variance = FALSE, gamma = FALSE, pairwise.deletion = FALSE, base.freq = NULL, as.matrix = TRUE) |>
   # Ape save to matrix. We convert it to tibble data frame
   # for easy manipulation using tidyverse syntax
-  tibble::as_tibble(rownames = "Taxon") 
-  
+  tibble::as_tibble(rownames = "Taxon")
 
 distance.long <- distance |>
-  tidyr::pivot_longer(!Taxon, names_to = "Taxon2", values_to = "JC69")
-``` 
+  tidyr::pivot_longer(!Taxon, names_to = "Taxon2", values_to = "JC69") 
+
+frateromys.long <- distance.long |>
+  dplyr::filter(stringr::str_starts(Taxon, "Frateromys")) |>
+  dplyr::filter(stringr::str_starts(Taxon2, "Frateromys")) |> 
+  # Remove the same individual from rows
+  dplyr::filter(Taxon != Taxon2)
+  
+frateromys <- frateromys.long |> 
+  # Ignore inter-species relationship. We detect based on naming patterns.
+  # dplyr::filter(stringr::str_extract(Taxon, "^[^_]+_[^_]+") == stringr::str_extract(Taxon2, "^[^_]+_[^_]+")) |> 
+  tidyr::pivot_wider(id_cols = Taxon, names_from = Taxon2, values_from = JC69) |> 
+  dplyr::relocate(Frateromys_fratrorum_KCR4049_Bogani, .after = Taxon)
+
+# Remove duplicate values in the upper triangle of the matrix
+frateromys[upper.tri(frateromys)] <- NA
+```
 
 # Save intra-specific genetic distance (OPTIONAL)
 
 ```{r}
-readr::write_csv(melted_distance, here("results", "JC69-distances-melted.csv"))
-readr::write_csv(distance, here("results", "JC69-distance-matrix.csv"))
+readr::write_csv(frateromys, here::here("results", "intra-frateromys-distanceJC69.csv"))
 ```
 
+## Intra-distance histogram
+
+```{r}
+species_data <- all_species |> 
+  dplyr::mutate(mode = "inter-specific") |> 
+  dplyr::rename(Taxon = Species) |> 
+  dplyr::rename(Taxon2 = Species2)
+
+frateromys_data <- frateromys.long |> 
+  dplyr::mutate(mode = "intra-frateromys") |> 
+  dplyr::rename(Distance = JC69) |> 
+  # Ignore inter-species relationship. We detect based on naming patterns.
+  dplyr::filter(stringr::str_extract(Taxon, "^[^_]+_[^_]+") == stringr::str_extract(Taxon2, "^[^_]+_[^_]+")) 
+
+df <- rbind(species_data, frateromys_data)
+
+ggplot(df, aes(x = Distance, color = mode)) + 
+  geom_histogram() +
+  scale_color_brewer(palette="Dark2")
+  theme_classic()
+```
 
 ## Computing avarage genetic distance for inter-specific relationship
 
@@ -70,10 +85,12 @@ distance.inter <- distance.long |>
   tidyr::unite("Species", Genus1, Species1) |>
   tidyr::unite("Species2", Genus2, Species2)
 
-inter_dist_matrix <- distance.inter |>
+all_species <- distance.inter |>
   dplyr::group_by(Species, Species2) |>
   dplyr::summarise(Distance = mean(JC69)) |>
-  dplyr::filter(Species != Species2) |> # Include only inter-specific relationship
+  dplyr::filter(Species != Species2)
+
+inter_dist_matrix <- all_species |> # Include only inter-specific relationship
   tidyr::pivot_wider(id_cols = Species, names_from = Species2, values_from = Distance) |>
   # Somehow tidyr messes up the order of the columns. 
   # B. andrewsi comes last. Here, we move it into the second column
