@@ -51,7 +51,7 @@ frateromys[upper.tri(frateromys)] <- NA
 # Save intra-specific genetic distance (OPTIONAL)
 
 ```{r}
-readr::write_csv(frateromys, here::here("results", "intra-frateromys-distanceJC69.csv"))
+readr::write_csv(frateromys, here::here("results", "intra-frateromys-distanceJC69.csv"), na="")
 ```
 
 ## Intra-distance histogram
