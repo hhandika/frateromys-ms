@@ -19,7 +19,7 @@ pacman::p_load(ggplot2)
 ## Data loading and distance matrix computing 
 
 ```{r}
-alignment.path <- here::here("data", "alignments", "1_cytb_dist.phy")
+alignment.path <- here::here("data", "alignments", "frateromys_cytb_dist.phy")
 
 alignment <- ape::read.dna(alignment.path, format="interleaved")
 
@@ -35,23 +35,32 @@ distance.long <- distance |>
 frateromys.long <- distance.long |>
   dplyr::filter(stringr::str_starts(Taxon, "Frateromys")) |>
   dplyr::filter(stringr::str_starts(Taxon2, "Frateromys")) |> 
+  dplyr::mutate(Population = stringr::str_remove(Taxon, "_[A-Z]{3,5}[0-9]+")) |> 
+  dplyr::mutate(Population2 = stringr::str_remove(Taxon2, "_[A-Z]{3,5}[0-9]+")) |> 
+  dplyr::relocate(Population, .after = Taxon) |> 
+  dplyr::relocate(Population2, .after = Taxon2) |>
   # Remove the same individual from rows
-  dplyr::filter(Taxon != Taxon2)
+  dplyr::filter(Population != Population2)
   
-frateromys <- frateromys.long |> 
+  
+summary_dist <- frateromys.long |> 
+  dplyr::group_by(Population, Population2) |>
+  dplyr::summarise(Mean_distance = mean(JC69))
+  
+frateromys_dist <- summary_dist |> 
   # Ignore inter-species relationship. We detect based on naming patterns.
   # dplyr::filter(stringr::str_extract(Taxon, "^[^_]+_[^_]+") == stringr::str_extract(Taxon2, "^[^_]+_[^_]+")) |> 
-  tidyr::pivot_wider(id_cols = Taxon, names_from = Taxon2, values_from = JC69) |> 
-  dplyr::relocate(Frateromys_fratrorum_KCR4049_Bogani, .after = Taxon)
+  tidyr::pivot_wider(id_cols = Population, names_from = Population2, values_from = Mean_distance)  |> 
+  dplyr::relocate(Frateromys_fratrorum_Ambang, .after = Population)
 
 # Remove duplicate values in the upper triangle of the matrix
-frateromys[upper.tri(frateromys)] <- NA
+frateromys_dist[upper.tri(frateromys_dist)] <- NA
 ```
 
 # Save intra-specific genetic distance (OPTIONAL)
 
 ```{r}
-readr::write_csv(frateromys, here::here("results", "intra-frateromys-distanceJC69.csv"), na="")
+readr::write_csv(frateromys_dist, here::here("results", "intra-frateromys-distanceJC69.csv"), na="")
 ```
 
 ## Intra-distance histogram
