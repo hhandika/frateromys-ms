@@ -14,6 +14,23 @@ pacman::p_load(readr)
 pacman::p_load(ggtree)
 pacman::p_load(tidytree)
 pacman::p_load(ggplot2)
+
+citation()
+```
+## Citation
+
+```{r}
+
+package_list <- c("here", "ape", "infer", "tidyr", "readr", "dplyr", "ggplot2", "tibble")
+
+generate_citation <- function(packageName) {
+  packageVersion(packageName)
+  citation(packageName)
+}
+packageVersion("readr")
+purrr::map(package_list, generate_citation)
+
+RStudio.Version()
 ```
 
 ## Data loading and distance matrix computing 
@@ -41,7 +58,6 @@ frateromys.long <- distance.long |>
   dplyr::relocate(Population2, .after = Taxon2) |>
   # Remove the same individual from rows
   dplyr::filter(Population != Population2)
-  
   
 summary_dist <- frateromys.long |> 
   dplyr::group_by(Population, Population2) |>
