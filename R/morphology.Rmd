@@ -18,6 +18,7 @@ pacman::p_load(tidyr)
 pacman::p_load(dplyr)
 pacman::p_load(ggplot2)
 pacman::p_load(readxl)
+pacman::p_load(ggpubr)
 
 
 source(here("R", "colors.R"))
@@ -109,21 +110,21 @@ species_group1 <- c("Bunomys chrysocomus", "Frateromys fratrorum", "Frateromys s
 
 species_group2 <- c("Bunomys penitus", "Frateromys fratrorum", "Frateromys sororum", "Lenomys meyeri", "Taeromys dominator")
 
-ext |> 
+p1 <- ext |> 
   dplyr::select(species, HB:ER) |> 
   dplyr::filter(species %in% species_group1) |>
-  tidyr::drop_na() |> 
+  tidyr::drop_na() |>
   tidyr::gather(key = "ext_char", value = "measurement", HB:ER) |>
-  dplyr::mutate(ext_char = forcats::fct_reorder(ext_char, measurement, .desc = TRUE)) |>
+  dplyr::mutate(ext_char = forcats::fct_reorder(ext_char, measurement, .desc = TRUE)) |> 
   ggplot(aes(species, measurement)) + 
     geom_boxplot(aes(fill = species), alpha = 0.8) +
     facet_wrap(~ext_char, ncol = 2, scale="free_y") +
     scale_fill_brewer(palette = "Dark2") +
     theme_bw() +
-    theme(axis.text.x = element_text(angle = 50, hjust = 1)) + 
+    theme(axis.text.x = element_text(angle = 50, hjust = 1), legend.position="none") + 
     labs(x = "Species", y = "Measurements")
   
-
+p1
 save_plot(fname = "ext_char.pdf", .width = 8, .height = 5)
 ```
 
@@ -186,7 +187,8 @@ plot <- function(plot_data) {
     # scale_shape_manual(values = c(1, 15, 16, 2, 0, 5)) +
     scale_color_brewer(palette = "Dark2", name = "Species") +
     theme_bw(base_size = 12) +
-    theme(legend.position = "right")
+    theme(legend.position = "bottom", legend.text = element_text(size = 10, face = "italic")) +
+    guides(col = guide_legend(ncol = 3))
 }
 ```
 
@@ -207,6 +209,16 @@ p3 <- plot(pca_13) + labs(x = "PC1 (89.7%)", y = "PC3 (1.4%)")
 save_plot(fname = "pca_20skulls_pc1_pc3.pdf")
 
 ```
+## Final plots with layout
+
+```{r}
+p23 <- ggpubr::ggarrange(p2, p3, ncol = 2, labels = c("B", "C"), common.legend = TRUE, legend = "bottom")
+ggpubr::ggarrange(p1, p23, nrow = 2, labels = "A")
+
+save_plot(fname = "figure_combined.pdf", .width = 8, .height = 9)
+```
+
+
 
 ## PCA Combined (include external and skulls)
 
