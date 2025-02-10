@@ -17,6 +17,7 @@ pacman::p_load(tibble)
 pacman::p_load(tidyr)
 pacman::p_load(dplyr)
 pacman::p_load(ggplot2)
+pacman::p_load(readxl)
 
 
 source(here("R", "colors.R"))
@@ -28,7 +29,7 @@ source(here("R", "utils.R"))
 Load and subset datasets for external and skull morphology analyses.
 
 ```{r}
-morph_all <- readr::read_csv(here("data", "morphology", "morpho_all.csv")) |> 
+morph_all <- readxl::read_excel(here("data", "morphology", "morpho_all.xlsx")) |> 
   dplyr::mutate(species = stringr::str_replace(species, pattern = "Frateromys spnov", "Frateromys sororum"))
 
 ext <- morph_all |> 
@@ -115,52 +116,15 @@ ext |>
   tidyr::gather(key = "ext_char", value = "measurement", HB:ER) |>
   dplyr::mutate(ext_char = forcats::fct_reorder(ext_char, measurement, .desc = TRUE)) |>
   ggplot(aes(species, measurement)) + 
-  geom_boxplot(aes(fill = species)) +
-  facet_wrap(~ext_char, ncol = 2, scale="free_y") +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 50, hjust = 1)) + 
-  labs(x = "Species", y = "Measurements")
-  
-
-save_plot(fname = "ext_char.pdf", .width = 8, .height = 5)
-```
-## Shared plot function
-
-This function is used for creating scatter plots across the downstream analyses.
-
-```{r}
-plot <- function(plot_data) {
-  plot_data +
-    geom_point(aes(color = species, shape = species), size = 3) +
-    scale_color_drunken_mice() +
-    scale_shape_manual(values = c(1, 15, 16, 2, 0, 5)) +
-    theme_classic(base_size = 12) +
-    theme(legend.position = "right")
-}
-```
-
-### Scatter plot for External Character
-
-```{r}
-ext_p <- ggplot(ext_scatter_df, aes(HB, TL))
-
-p <- plot(ext_p) + labs(x = "Head and Body Length (mm)", y = "Tail Length (mm)")
-p
-save_ext("hb_tl_scatterplot.pdf")
-```
-
-## Explore key characters
-
-```{r}
-morph_all |> 
-  dplyr::filter(species %in% species_group1) |>
-  tidyr::drop_na() |> 
-  ggplot(aes(x = ZB, y = LON)) +
-    geom_boxplot(aes(fill = species)) +
+    geom_boxplot(aes(fill = species), alpha = 0.8) +
+    facet_wrap(~ext_char, ncol = 2, scale="free_y") +
+    scale_fill_brewer(palette = "Dark2") +
     theme_bw() +
     theme(axis.text.x = element_text(angle = 50, hjust = 1)) + 
     labs(x = "Species", y = "Measurements")
   
+
+save_plot(fname = "ext_char.pdf", .width = 8, .height = 5)
 ```
 
 
@@ -171,7 +135,7 @@ skull_clean <- skulls |>
   drop_na() |>
   filter(species %in% species_group1)
 
-skull_pca <- prcomp(skull_clean[, 3:22], center = TRUE, scale = TRUE)
+skull_pca <- prcomp(skull_clean[, 3:22])
 ```
 
 ### Inspect PCA
@@ -181,12 +145,49 @@ eigen <- skull_pca$sdev^2 |>
   tibble::as_tibble(rownames = "PC") 
 skull_pca
 
-loadings <- skull_pca$rotation
+loadings <- skull_pca$rotation 
 
 loadings.df <- loadings |> 
-  tibble::as_tibble(rownames = "Variables")
+  tibble::as_tibble(rownames = "Variables") |> 
+  dplyr::select(Variables, PC1, PC2, PC3)
 
-summary(skull_pca)$importance
+pull_eigen <- function(pc) {
+    value <- eigen |> 
+      filter(PC == pc) |> 
+      pull(value)
+    value
+}
+
+eigen.df <- tibble(
+  Variables = "Eigen value", 
+  PC1 = pull_eigen(1),
+  PC2 = pull_eigen(2),
+  PC3 =  pull_eigen(3))
+
+summary <- summary(skull_pca)$importance |> 
+  tibble::as_tibble(rownames = "Variables") |> 
+  dplyr::select(Variables, PC1, PC2, PC3)
+
+summary.df <- loadings.df |> 
+  tibble::add_row(eigen.df) |> 
+  tibble::add_row(summary) |> 
+  dplyr::filter(Variables != "Cumulative Proportion")
+
+readr::write_csv(summary.df, here::here("results", "loadings.csv"))
+```
+## Shared plot function
+
+This function is used for creating scatter plots across the downstream analyses.
+
+```{r}
+plot <- function(plot_data) {
+  plot_data +
+    geom_point(aes(color = species), alpha = 0.8, size = 3) +
+    # scale_shape_manual(values = c(1, 15, 16, 2, 0, 5)) +
+    scale_color_brewer(palette = "Dark2", name = "Species") +
+    theme_bw(base_size = 12) +
+    theme(legend.position = "right")
+}
 ```
 
 ### Plot PCA
@@ -198,16 +199,16 @@ pca_12 <- ggplot(skull_df, aes(PC1, PC2))
 pca_13 <- ggplot(skull_df, aes(PC1, PC3))
 
 
-p2 <- plot(pca_12) + labs(x = "PC1 (89.7%)", y = "PC2 (2.2%)")
+p2 <- plot(pca_12) + labs(x = "PC1 (89.7%)", y = "PC2 (2.3%)")
 save_plot(fname = "pca_20skulls_pc1_pc2.pdf")
 
 
-p3 <- plot(pca_13) +labs(x = "PC1 (89.7%)", y = "PC3 (1.4%)")
+p3 <- plot(pca_13) + labs(x = "PC1 (89.7%)", y = "PC3 (1.4%)")
 save_plot(fname = "pca_20skulls_pc1_pc3.pdf")
 
 ```
 
-## PCA Combined 
+## PCA Combined (include external and skulls)
 
 ```{r}
 combined_cleaned <- combined |>
