@@ -19,6 +19,7 @@ pacman::p_load(dplyr)
 pacman::p_load(ggplot2)
 pacman::p_load(readxl)
 pacman::p_load(ggpubr)
+pacman::p_load(factoextra)
 
 
 source(here("R", "colors.R"))
@@ -33,10 +34,17 @@ Load and subset datasets for external and skull morphology analyses.
 morph_all <- readxl::read_excel(here("data", "morphology", "morpho_all.xlsx")) |> 
   dplyr::mutate(species = stringr::str_replace(species, pattern = "Frateromys spnov", "Frateromys sororum"))
 
+abbreviate_genus <- function(name) {
+  name %>%
+    stringr::str_replace("^([A-Za-z])\\w+\\s", "\\1. ")
+}
+
 ext <- morph_all |> 
-  dplyr::select(species, voucher_no, site_id, HB, TL, HF, ER, Mass)
+  dplyr::mutate(species = abbreviate_genus(species)) |>
+  dplyr::select(species, voucher_no, site_id, HB, TL, HF, ER, WT) 
 
 skulls <- morph_all |> 
+  dplyr::mutate(species = abbreviate_genus(species)) |>
   dplyr::select(voucher_no, species, GLS:DUI)
 
 combined <- morph_all |> 
@@ -106,22 +114,22 @@ sum_per_site <- ext |>
 ## Box plot
 
 ```{r}
-species_group1 <- c("Bunomys chrysocomus", "Frateromys fratrorum", "Frateromys sororum", "Taeromys dominator", "Taeromys taerae")
-
-species_group2 <- c("Bunomys penitus", "Frateromys fratrorum", "Frateromys sororum", "Lenomys meyeri", "Taeromys dominator")
+species_group1 <- c("B. chrysocomus", "F. fratrorum", "F. sororum", "T. dominator", "T. taerae")
+species_group2 <- c("B. penitus", "F. fratrorum", "F. sororum", "L. meyeri", "T. dominator")
+var_levels <- c("HB", "TL", "HF", "ER", "WT")
 
 p1 <- ext |> 
-  dplyr::select(species, HB:ER) |> 
+  dplyr::select(species, HB:WT) |> 
   dplyr::filter(species %in% species_group1) |>
   tidyr::drop_na() |>
-  tidyr::gather(key = "ext_char", value = "measurement", HB:ER) |>
-  dplyr::mutate(ext_char = forcats::fct_reorder(ext_char, measurement, .desc = TRUE)) |> 
+  pivot_longer(cols = HB:WT, names_to = "ext_char", values_to = "measurement") |>
+  dplyr::mutate(ext_char = forcats::fct_relevel(ext_char, var_levels)) |>
   ggplot(aes(species, measurement)) + 
     geom_boxplot(aes(fill = species), alpha = 0.8) +
-    facet_wrap(~ext_char, ncol = 2, scale="free_y") +
+    facet_wrap(vars(ext_char), ncol = 2, scale="free_y") +
     scale_fill_brewer(palette = "Dark2") +
     theme_bw() +
-    theme(axis.text.x = element_text(angle = 50, hjust = 1), legend.position="none") + 
+    theme(axis.text.x = element_text(angle = 50, hjust = 1, face = "italic"), legend.position="none") + 
     labs(x = "Species", y = "Measurements")
   
 p1
@@ -138,6 +146,22 @@ skull_clean <- skulls |>
 
 skull_pca <- prcomp(skull_clean[, 3:22])
 ```
+
+### Inspect variable contribution
+
+```{r}
+factoextra::fviz_pca_var(
+  skull_pca,
+  col.var = "contrib", # Color by contributions to the PC
+  gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+  repel = TRUE     # Avoid text overlapping
+)
+
+factoextra::fviz_contrib(skull_pca, choice = "var", axes = 1, top = 10)
+factoextra::fviz_contrib(skull_pca, choice = "var", axes = 2, top = 10)
+factoextra::fviz_contrib(skull_pca, choice = "var", axes = 3, top = 10)
+```
+
 
 ### Inspect PCA
 
@@ -168,6 +192,17 @@ eigen.df <- tibble(
 summary <- summary(skull_pca)$importance |> 
   tibble::as_tibble(rownames = "Variables") |> 
   dplyr::select(Variables, PC1, PC2, PC3)
+
+pull_variance <- function(pc) {
+  value <- summary |> 
+    filter(Variables == "Proportion of Variance") |> 
+    pull(pc)
+  round(value * 100, digits = 1)
+}
+
+prop_pc1 <- pull_variance("PC1")
+prop_pc2 <- pull_variance("PC2")
+prop_pc3 <- pull_variance("PC3")
 
 summary.df <- loadings.df |> 
   tibble::add_row(eigen.df) |> 
@@ -200,12 +235,15 @@ skull_df <- tibble(species = skull_clean$species, PC1 = skull_pca$x[, 1], PC2 = 
 pca_12 <- ggplot(skull_df, aes(PC1, PC2))
 pca_13 <- ggplot(skull_df, aes(PC1, PC3))
 
+create_axis_title <- function(pc, value) {
+  paste0("PC", pc, "(", value, "%)")
+}
 
-p2 <- plot(pca_12) + labs(x = "PC1 (89.7%)", y = "PC2 (2.3%)")
+p2 <- plot(pca_12) + labs(x = create_axis_title(1, prop_pc1), y = create_axis_title(2, prop_pc2))
 save_plot(fname = "pca_20skulls_pc1_pc2.pdf")
 
 
-p3 <- plot(pca_13) + labs(x = "PC1 (89.7%)", y = "PC3 (1.4%)")
+p3 <- plot(pca_13) + labs(x = create_axis_title(1, prop_pc1), y = create_axis_title(3, prop_pc3))
 save_plot(fname = "pca_20skulls_pc1_pc3.pdf")
 
 ```
@@ -215,38 +253,12 @@ save_plot(fname = "pca_20skulls_pc1_pc3.pdf")
 p23 <- ggpubr::ggarrange(p2, p3, ncol = 2, labels = c("B", "C"), common.legend = TRUE, legend = "bottom")
 ggpubr::ggarrange(p1, p23, nrow = 2, labels = "A")
 
-save_plot(fname = "figure_combined.pdf", .width = 8, .height = 9)
+save_plot(fname = "figure_combined.pdf", .width = 8, .height = 10)
 ```
-
-
-
-## PCA Combined (include external and skulls)
-
-```{r}
-combined_cleaned <- combined |>
-  drop_na() |>
-  filter(species %in% species_group1)
-
-combined_pca <- prcomp(combined_cleaned[, 3:7], center = TRUE, scale = TRUE)
-
-comb_loadings <- combined_pca$rotation |> 
-  tibble::as_tibble(rownames = "Var")
-
-skull_df <- tibble(species = combined_cleaned$species, PC1 = combined_pca$x[, 1], PC2 = combined_pca$x[, 2])
-
-pca_12 <- ggplot(skull_df, aes(PC1, PC2))
-pca_13 <- ggplot(skull_df, aes(PC1, PC3))
-
-p2 <- plot(pca_12) + labs(x = "PC1 (89.7%)", y = "PC2 (2.2%)")
-save_plot(fname = "pca_20skulls_pc1_pc2.pdf")
-
-```
-
 
 ## Citation
 
 ```{r}
-
 package_list <- c("here", "pacman", "infer", "tidyr", "dplyr", "ggplot2", "tibble")
 
 generate_citation <- function(packageName) {
