@@ -142,9 +142,10 @@ save_plot(fname = "ext_char.pdf", .width = 8, .height = 5)
 ```{r}
 skull_clean <- skulls |>
   drop_na() |>
-  filter(species %in% species_group1)
+  filter(species %in% species_group1) |> 
+  dplyr::mutate(across(ZB:DUI, ~ GLS/.x))
 
-skull_pca <- prcomp(skull_clean[, 3:22])
+skull_pca <- prcomp(skull_clean[, 4:22])
 ```
 
 ### Inspect variable contribution
