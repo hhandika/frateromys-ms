@@ -116,14 +116,14 @@ sum_per_site <- ext |>
 ```{r}
 species_group1 <- c("B. chrysocomus", "F. fratrorum", "F. sororum", "T. dominator", "T. taerae")
 species_group2 <- c("B. penitus", "F. fratrorum", "F. sororum", "L. meyeri", "T. dominator")
-var_levels <- c("HB", "TL", "HF", "ER", "WT", "HB_TL")
+var_levels <- c("HB", "TL", "HF", "ER", "WT", "Percent TL/B")
 
 p1 <- ext |> 
   dplyr::select(species, HB:WT) |> 
   dplyr::filter(species %in% species_group1) |>
   tidyr::drop_na() |>
-  dplyr::mutate(HB_TL = WT/HB * 100) |> 
-  pivot_longer(cols = HB:HB_TL, names_to = "ext_char", values_to = "measurement") |>
+  dplyr::mutate("Percent TL/HB" = WT/HB * 100) |> 
+  pivot_longer(cols = HB:"Percent TL/HB", names_to = "ext_char", values_to = "measurement") |>
   dplyr::mutate(ext_char = forcats::fct_relevel(ext_char, var_levels)) |>
   ggplot(aes(species, measurement)) + 
     geom_boxplot(aes(fill = species), alpha = 0.8) +
@@ -142,11 +142,10 @@ save_plot(fname = "ext_char.pdf", .width = 8, .height = 5)
 
 ```{r}
 skull_clean <- skulls |>
-  drop_na() |>
-  filter(species %in% species_group1) |> 
-  dplyr::mutate(across(ZB:DUI, ~ GLS/.x))
+  tidyr::drop_na() |>
+  dplyr::filter(species %in% species_group1)
 
-skull_pca <- prcomp(skull_clean[, 4:22])
+skull_pca <- prcomp(skull_clean[, 3:22])
 ```
 
 ### Inspect variable contribution
