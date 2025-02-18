@@ -32,7 +32,8 @@ Load and subset datasets for external and skull morphology analyses.
 
 ```{r}
 morph_all <- readxl::read_excel(here("data", "morphology", "morpho_all.xlsx")) |> 
-  dplyr::mutate(species = stringr::str_replace(species, pattern = "Frateromys spnov", "Frateromys sororum"))
+  dplyr::mutate(species = stringr::str_replace(species, pattern = "Frateromys spnov", "Frateromys sororum")) |> 
+  dplyr::mutate(site_id = stringr::str_replace(site_id, pattern = "Mt. Dua Saudara", "Dua Saudara"))
 
 abbreviate_genus <- function(name) {
   name %>%
@@ -45,7 +46,7 @@ ext <- morph_all |>
 
 skulls <- morph_all |> 
   dplyr::mutate(species = abbreviate_genus(species)) |>
-  dplyr::select(voucher_no, species, GLS:DUI)
+  dplyr::select(voucher_no, species, site_id, GLS:DUI)
 
 combined <- morph_all |> 
   dplyr::select(voucher_no, species, HB:DUI)
@@ -114,13 +115,14 @@ sum_per_site <- ext |>
 ## Box plot
 
 ```{r}
-species_group1 <- c("B. chrysocomus", "F. fratrorum", "F. sororum", "T. dominator", "T. taerae")
+species_group1 <- c("F. fratrorum", "F. sororum", "B. chrysocomus", "T. dominator", "T. taerae")
 species_group2 <- c("B. penitus", "F. fratrorum", "F. sororum", "L. meyeri", "T. dominator")
-var_levels <- c("HB", "TL", "HF", "ER", "WT", "Percent TL/B")
+var_levels <- c("HB", "TL", "HF", "ER", "WT", "Percent TL/HB")
 
 p1 <- ext |> 
   dplyr::select(species, HB:WT) |> 
   dplyr::filter(species %in% species_group1) |>
+  dplyr::mutate(species = forcats::fct_relevel(species, species_group1)) |> 
   tidyr::drop_na() |>
   dplyr::mutate("Percent TL/HB" = WT/HB * 100) |> 
   pivot_longer(cols = HB:"Percent TL/HB", names_to = "ext_char", values_to = "measurement") |>
@@ -145,7 +147,7 @@ skull_clean <- skulls |>
   tidyr::drop_na() |>
   dplyr::filter(species %in% species_group1)
 
-skull_pca <- prcomp(skull_clean[, 3:22])
+skull_pca <- prcomp(skull_clean[,4:23])
 ```
 
 ### Inspect variable contribution
@@ -231,7 +233,14 @@ plot <- function(plot_data) {
 ### Plot PCA
 
 ```{r}
-skull_df <- tibble(species = skull_clean$species, PC1 = skull_pca$x[, 1], PC2 = skull_pca$x[, 2], PC3= skull_pca$x[, 3])
+skull_df <- tibble(
+  species = skull_clean$species, 
+  sites = skull_clean$site_id, 
+  PC1 = skull_pca$x[, 1], 
+  PC2 = skull_pca$x[, 2], 
+  PC3= skull_pca$x[, 3]
+  ) |> 
+  dplyr::mutate(species = forcats::fct_relevel(species, species_group1)) 
 
 pca_12 <- ggplot(skull_df, aes(PC1, PC2))
 pca_13 <- ggplot(skull_df, aes(PC1, PC3))
@@ -247,6 +256,20 @@ save_plot(fname = "pca_20skulls_pc1_pc2.pdf")
 p3 <- plot(pca_13) + labs(x = create_axis_title(1, prop_pc1), y = create_axis_title(3, prop_pc3))
 save_plot(fname = "pca_20skulls_pc1_pc3.pdf")
 
+frateromys <- c("F. fratrorum", "F. sororum")
+
+fratromys.plot <- skull_df |> 
+  dplyr::filter(species %in% frateromys) |>
+  ggplot(aes(PC1, PC3, shape = sites)) +
+    geom_point(aes(color = species), alpha = 0.8, size = 3) +
+    scale_shape_manual(values = c(1, 2, 16, 15, 17, 5, 6, 5), name = "Sites") +
+    scale_color_brewer(palette = "Dark2", name = "Species") +
+    theme_bw(base_size = 12) +
+    theme(legend.position = "right", legend.text = element_text(size = 10, face = "italic")) +
+    guides(col = guide_legend(ncol = 3)) +
+    labs(x = create_axis_title(1, prop_pc1), y = create_axis_title(3, prop_pc3))
+
+save_plot(fname = "frateromys_pops_pc13.pdf")
 ```
 ## Final plots with layout
 
