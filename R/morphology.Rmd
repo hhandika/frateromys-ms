@@ -275,9 +275,9 @@ save_plot(fname = "frateromys_pops_pc13.pdf")
 
 ```{r}
 p23 <- ggpubr::ggarrange(p2, p3, ncol = 2, labels = c("B", "C"), common.legend = TRUE, legend = "bottom")
-ggpubr::ggarrange(p1, p23, nrow = 2, labels = "A")
+ggpubr::ggarrange(p1, p23, fratromys.plot, nrow = 3, labels = c("A", "", "D"))
 
-save_plot(fname = "figure_combined.pdf", .width = 8, .height = 10)
+save_plot(fname = "figure_combined.pdf", .width = 8, .height = 12)
 ```
 
 ## Citation
